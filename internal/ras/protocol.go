@@ -362,11 +362,11 @@ func (c *conn) invoke(ctx context.Context, reqType int, fill func(w *rascodec.Wr
 		return nil, err
 	}
 
-	body, derr := decodeEnvelope(data)
+	resp, derr := decodeEnvelope(data)
 	if derr != nil {
 		c.tracef("запрос %d: отказ сервера %v", reqType, derr)
 	}
-	return body, derr
+	return resp, derr
 }
 
 // endpointEnvelope собирает тело пакета ENDPOINT_MESSAGE:

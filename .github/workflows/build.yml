@@ -70,7 +70,7 @@ jobs:
             go test ./... -count=1 2>&1 || true
           } > ci-report.txt || true
           tail -c 55000 ci-report.txt | jq -Rs '{body: ("**check job failed**\n```diff\n" + . + "\n```")}' > payload.json
-          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" --input payload.json
+          gh api -X POST "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" --input payload.json
 
   # ---------------------------------------------------------------------
   # Основная сборка: Windows, ресурсы exe, NSIS-установщик, артефакты.
@@ -171,7 +171,7 @@ jobs:
         run: |
           tail -c 55000 ci.log > ci-tail.log || true
           jq -Rs '{body: ("**build job failed**\n```\n" + . + "\n```")}' ci-tail.log > payload.json
-          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" --input payload.json
+          gh api -X POST "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" --input payload.json
 
       # Публикация релиза — только для тегов v*: релиз получает тот же
       # порядковый номер сборки, что и exe-файл.

@@ -138,19 +138,32 @@ jobs:
           ./build/out/SessionCleaner.exe -version | tee -a ci.log
           ./build/out/SessionCleaner.exe -version | grep -q "сборка ${{ steps.buildno.outputs.number }}"
 
-      - name: NSIS (проверка наличия)
+      - name: NSIS (поиск или установка)
         shell: pwsh
         run: |
+          $log = "ci.log"
           if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
-            Write-Host "makensis не найден — ставим NSIS через chocolatey"
-            choco install nsis --yes --no-progress
+            "makensis не найден — ставим NSIS через chocolatey" | Tee-Object -FilePath $log -Append
+            choco install nsis --yes --no-progress *>&1 | Tee-Object -FilePath $log -Append
+            $profile = Join-Path $env:ChocolateyInstall "helpers\chocolateyProfile.psm1"
+            if (Test-Path $profile) { Import-Module $profile; refreshenv }
           }
-          makensis -VERSION
+          $m = Get-Command makensis -ErrorAction SilentlyContinue
+          if (-not $m) {
+            foreach ($p in @("${env:ProgramFiles(x86)}\NSIS\makensis.exe", "$env:ProgramFiles\NSIS\makensis.exe")) {
+              if (Test-Path $p) { $m = Get-Command $p; break }
+            }
+          }
+          if (-not $m) { throw "makensis не найден ни в PATH, ни в Program Files" }
+          "makensis: $($m.Source)" | Tee-Object -FilePath $log -Append
+          "MAKENSIS_PATH=$($m.Source)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $m.Source -VERSION *>&1 | Tee-Object -FilePath $log -Append
 
       - name: Установщик (NSIS)
         shell: bash
         run: |
-          makensis -V3 \
+          MK="${MAKENSIS_PATH:-makensis}"
+          "$MK" -V3 \
             -DAPP_VERSION=${APP_VERSION} \
             -DBUILD_NUMBER=${{ steps.buildno.outputs.number }} \
             -DOUT_DIR="$GITHUB_WORKSPACE/build/out" \

@@ -110,12 +110,14 @@ jobs:
       - name: Ресурсы exe (иконка, манифест, версия)
         shell: bash
         run: |
-          cd build/winres
+          # go-winres ищет каталог winres/ относительно текущей папки,
+          # а пути файлов внутри winres.json — относительно самого json.
+          cd build
           "$(go env GOPATH)/bin/go-winres" make \
             --arch amd64 \
             --file-version "${APP_VERSION}.${{ steps.buildno.outputs.number }}" \
-            --product-version "${APP_VERSION}.${{ steps.buildno.outputs.number }}" 2>&1 | tee -a ../../ci.log
-          mv rsrc_windows_amd64.syso ../../cmd/sessioncleaner/
+            --product-version "${APP_VERSION}.${{ steps.buildno.outputs.number }}" 2>&1 | tee -a ../ci.log
+          mv rsrc_windows_amd64.syso ../cmd/sessioncleaner/
 
       - name: Сборка SessionCleaner.exe
         shell: bash

@@ -7,6 +7,10 @@
 #   - в имя артефакта загрузки.
 #
 # Сборка идёт только в GitHub Actions: локальная сборка не требуется.
+#
+# Если шаг падает, шаг «отчёт об ошибке» публикует вывод (gofmt -d, go vet,
+# go test, go build, makensis) комментарием к коммиту, чтобы диагностику
+# можно было прочитать через API GitHub.
 
 name: build
 
@@ -50,6 +54,24 @@ jobs:
       - name: go test
         run: go test ./... -count=1
 
+      - name: отчёт об ошибке
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### gofmt -d"
+            gofmt -d . 2>&1 || true
+            echo
+            echo "### go vet ./..."
+            go vet ./... 2>&1 || true
+            echo
+            echo "### go test ./... -count=1"
+            go test ./... -count=1 2>&1 || true
+          } > ci-report.txt || true
+          tail -c 55000 ci-report.txt | jq -Rs '{body: ("**check job failed**\n```diff\n" + . + "\n```")}' > payload.json
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" --input payload.json
+
   # ---------------------------------------------------------------------
   # Основная сборка: Windows, ресурсы exe, NSIS-установщик, артефакты.
   # ---------------------------------------------------------------------
@@ -76,10 +98,12 @@ jobs:
           echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Тесты (windows)
-        run: go test ./... -count=1
+        shell: bash
+        run: go test ./... -count=1 2>&1 | tee -a ci.log
 
       - name: go-winres
-        run: go install github.com/tc-hib/go-winres@latest
+        shell: bash
+        run: go install github.com/tc-hib/go-winres@latest 2>&1 | tee -a ci.log
 
       - name: Ресурсы exe (иконка, манифест, версия)
         shell: bash
@@ -88,7 +112,7 @@ jobs:
           "$(go env GOPATH)/bin/go-winres" make \
             --arch amd64 \
             --file-version "${APP_VERSION}.${{ steps.buildno.outputs.number }}" \
-            --product-version "${APP_VERSION}.${{ steps.buildno.outputs.number }}"
+            --product-version "${APP_VERSION}.${{ steps.buildno.outputs.number }}" 2>&1 | tee -a ../../ci.log
           mv rsrc_windows_amd64.syso ../../cmd/sessioncleaner/
 
       - name: Сборка SessionCleaner.exe
@@ -102,12 +126,12 @@ jobs:
               -X github.com/zigorminsk-debug/death-1c/internal/buildinfo.Commit=${{ steps.buildno.outputs.commit }} \
               -X github.com/zigorminsk-debug/death-1c/internal/buildinfo.Date=${{ steps.buildno.outputs.date }} \
               -X github.com/zigorminsk-debug/death-1c/internal/buildinfo.Channel=release" \
-            -o build/out/SessionCleaner.exe ./cmd/sessioncleaner
+            -o build/out/SessionCleaner.exe ./cmd/sessioncleaner 2>&1 | tee -a ci.log
 
       - name: Проверка версии в exe
         shell: bash
         run: |
-          ./build/out/SessionCleaner.exe -version
+          ./build/out/SessionCleaner.exe -version | tee -a ci.log
           ./build/out/SessionCleaner.exe -version | grep -q "сборка ${{ steps.buildno.outputs.number }}"
 
       - name: NSIS (проверка наличия)
@@ -126,7 +150,7 @@ jobs:
             -DAPP_VERSION=${APP_VERSION} \
             -DBUILD_NUMBER=${{ steps.buildno.outputs.number }} \
             -DOUT_DIR="$GITHUB_WORKSPACE/build/out" \
-            installer/setup.nsi
+            installer/setup.nsi 2>&1 | tee -a ci.log
           ls -la build/out
 
       - name: Артефакты
@@ -138,6 +162,16 @@ jobs:
             build/out/SessionCleaner-Setup-${{ steps.buildno.outputs.number }}.exe
           if-no-files-found: error
           retention-days: 90
+
+      - name: отчёт об ошибке
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tail -c 55000 ci.log > ci-tail.log || true
+          jq -Rs '{body: ("**build job failed**\n```\n" + . + "\n```")}' ci-tail.log > payload.json
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" --input payload.json
 
       # Публикация релиза — только для тегов v*: релиз получает тот же
       # порядковый номер сборки, что и exe-файл.

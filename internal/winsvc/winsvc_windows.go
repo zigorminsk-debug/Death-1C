@@ -19,10 +19,47 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+	"unicode"
+	"unicode/utf8"
+	"unsafe"
 
 	"github.com/zigorminsk-debug/death-1c/internal/winexec"
 )
+
+var (
+	kernel32dll             = syscall.NewLazyDLL("kernel32.dll")
+	procMultiByteToWideChar = kernel32dll.NewProc("MultiByteToWideChar")
+	procGetOEMCP            = kernel32dll.NewProc("GetOEMCP")
+)
+
+// oemToUTF8 преобразует вывод системных утилит Windows (sc, net, powershell
+// в OEM-кодировке, обычно CP866) в UTF-8. Без этого русские имена и состояния
+// служб приходят в интерфейс кракозябрами.
+func oemToUTF8(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	if utf8.Valid(b) {
+		return string(b)
+	}
+	cp, _, _ := procGetOEMCP.Call()
+	if cp == 0 {
+		cp = 866
+	}
+	n, _, _ := procMultiByteToWideChar.Call(cp, 0, uintptr(unsafe.Pointer(&b[0])), uintptr(len(b)), 0, 0)
+	if n <= 0 {
+		return string(b)
+	}
+	buf := make([]uint16, n)
+	n2, _, _ := procMultiByteToWideChar.Call(cp, 0, uintptr(unsafe.Pointer(&b[0])), uintptr(len(b)),
+		uintptr(unsafe.Pointer(&buf[0])), uintptr(n))
+	if n2 <= 0 {
+		return string(b)
+	}
+	return syscall.UTF16ToString(buf[:n2])
+}
 
 // Service — служба Windows на сервере 1С.
 type Service struct {
@@ -92,7 +129,7 @@ func (m *Manager) Connect() error {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("подключение к %s от имени %s не выполнено: %s",
-			m.host, maskUser(m.user), firstLine(string(out), err))
+			m.host, maskUser(m.user), firstLine(oemToUTF8(out), err))
 	}
 	m.setConnected(true)
 	m.logf("установлено соединение IPC$ с %s", m.host)
@@ -261,13 +298,25 @@ func filterRelevant(in []Service) []Service {
 	return out
 }
 
+// hasWord ищет точное слово: без этого «SQLSERVERAGENT» матчится на «ragent».
+func hasWord(text, word string) bool {
+	for _, w := range strings.FieldsFunc(text, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}) {
+		if w == word {
+			return true
+		}
+	}
+	return false
+}
+
 func classify(text string) string {
 	t := strings.ToLower(text)
 	switch {
 	case strings.Contains(t, "remote server"), strings.Contains(t, "administration server"),
 		strings.HasSuffix(strings.TrimSpace(t), "ras"), strings.Contains(t, " ras "):
 		return "ras"
-	case strings.Contains(t, "server agent"), strings.Contains(t, "ragent"):
+	case strings.Contains(t, "server agent"), hasWord(t, "ragent"):
 		return "agent"
 	case strings.Contains(t, "1c"), strings.Contains(t, "1cv8"), strings.Contains(t, "enterprise 8"),
 		strings.Contains(t, "1с"), strings.Contains(t, "предприяти"), strings.Contains(t, "v8"):
@@ -348,7 +397,7 @@ func (m *Manager) setConnected(v bool) {
 func (m *Manager) runSilent(name string, args ...string) (string, error) {
 	cmd := winexec.Command(name, args...)
 	out, err := cmd.CombinedOutput()
-	return string(out), err
+	return oemToUTF8(out), err
 }
 
 func firstLine(out string, err error) string {

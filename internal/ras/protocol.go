@@ -46,9 +46,19 @@ const (
 
 // serviceVersions — поддерживаемые версии сервиса администрирования,
 // от старых к новым. Согласование идёт сверху вниз.
-var serviceVersions = []string{"3.0", "4.0", "5.0", "6.0", "7.0", "8.0", "9.0", "10.0"}
+var serviceVersions = []string{"1.0", "2.0", "3.0", "4.0", "5.0", "6.0", "7.0", "8.0", "9.0", "10.0"}
 
 var supportedRe = regexp.MustCompile(`(?m)supported=(.*?)]`)
+
+// prevServiceVersion возвращает версию сервиса на ступень старее указанной.
+func prevServiceVersion(v string) string {
+	for i := len(serviceVersions) - 1; i > 0; i-- {
+		if serviceVersions[i] == v {
+			return serviceVersions[i-1]
+		}
+	}
+	return ""
+}
 
 // FailureError — отказ сервера администрирования с расшифровкой причины.
 type FailureError struct {
@@ -103,6 +113,15 @@ type conn struct {
 	opened   bool
 	endpoint int32
 	version  int32
+
+	// trace — протокол рукопожатия и отказов: помогает понять по журналу
+	// и по окну проверки, на каком именно шаге сервер ответил отказом.
+	trace []string
+}
+
+// tracef добавляет шаг трассировки соединения.
+func (c *conn) tracef(format string, args ...interface{}) {
+	c.trace = append(c.trace, fmt.Sprintf(format, args...))
 }
 
 // dial устанавливает соединение и выполняет полное рукопожатие:
@@ -165,11 +184,13 @@ func (c *conn) handshake(ctx context.Context) error {
 	if _, err := c.tcp.Write(neg.Bytes()); err != nil {
 		return fmt.Errorf("negotiate: %w", err)
 	}
+	c.tracef("negotiate: magic=%d, протокол=256, кодек=256 отправлены", protocolMagic)
 
 	// 2. Connect — пустой набор параметров.
 	if _, err := c.exchange(ctx, pktConnect, func(w *rascodec.Writer) { w.Size(0) }, pktConnectAck); err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}
+	c.tracef("connect: сервер подтвердил соединение")
 
 	// 3. Endpoint open — сначала пробуем самую новую версию сервиса.
 	version := serviceVersions[len(serviceVersions)-1]
@@ -195,16 +216,24 @@ func (c *conn) handshake(ctx context.Context) error {
 			c.endpoint = int32(id)
 			c.version = int32(major)
 			c.opened = true
+			c.tracef("endpoint open: сервис %s, версия %s, id=%d", serviceName, ver, id)
 			return nil
 		}
 		var fe *FailureError
 		if !errors.As(err, &fe) {
 			return fmt.Errorf("endpoint open (%s): %w", version, err)
 		}
+		// Часть версий сервера вместо аккуратного отказа с перечнем версий
+		// бросает исключение (swp.UnknownThrowable и подобные). Поэтому при
+		// любом отказе пробуем следующую по старшинству версию сервиса.
 		next := fe.SupportedVersion()
 		if next == "" || next == version {
+			next = prevServiceVersion(version)
+		}
+		if next == "" {
 			return fmt.Errorf("endpoint open (%s): %w", version, err)
 		}
+		c.tracef("endpoint open: версия %s отклонена (%s), пробуем %s", version, fe.Error(), next)
 		version = next
 	}
 	return fmt.Errorf("не удалось открыть эндпоинт %s: перебраны все версии сервиса", serviceName)
@@ -329,10 +358,15 @@ func (c *conn) invoke(ctx context.Context, reqType int, fill func(w *rascodec.Wr
 		w.Bytes(endpointEnvelope(endpoint, reqType, payload))
 	}, pktEndpointMessage)
 	if err != nil {
+		c.tracef("запрос %d: ошибка обмена %v", reqType, err)
 		return nil, err
 	}
 
-	return decodeEnvelope(data)
+	body, derr := decodeEnvelope(data)
+	if derr != nil {
+		c.tracef("запрос %d: отказ сервера %v", reqType, derr)
+	}
+	return body, derr
 }
 
 // endpointEnvelope собирает тело пакета ENDPOINT_MESSAGE:

@@ -589,6 +589,10 @@ func (a *App) TestOneCConfig(ctx context.Context, cfg config.Config) TestResult 
 	if err != nil {
 		res.Message = err.Error()
 		a.addTestHints(&res, err, cfg)
+		for _, t := range client.Trace() {
+			res.Details = append(res.Details, "шаг: "+t)
+			a.log.Warn("проверка подключения к 1С: %s", t)
+		}
 		return res
 	}
 	res.OK = true

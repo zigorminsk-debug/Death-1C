@@ -52,6 +52,15 @@ func (cl *Client) Addr() string { return cl.c.addr }
 // EndpointVersion — согласованная версия сервиса администрирования (3…10).
 func (cl *Client) EndpointVersion() int32 { return cl.c.version }
 
+// Trace возвращает протокол рукопожатия и отказов текущего соединения.
+func (cl *Client) Trace() []string {
+	cl.c.mu.Lock()
+	defer cl.c.mu.Unlock()
+	out := make([]string, len(cl.c.trace))
+	copy(out, cl.c.trace)
+	return out
+}
+
 // Close закрывает соединение.
 func (cl *Client) Close() error { return cl.c.close() }
 

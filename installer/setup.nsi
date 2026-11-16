@@ -104,8 +104,12 @@ Section "Программа «Очистка сеансов 1С»" SEC_MAIN
     "HelpLink" "mailto:ziv@csl.by"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\1CSessionCleaner" \
     "Contact" "ziv@csl.by, +375293371412"
+  ; Путь обязан быть в кавычках: без них оболочка спотыкается о пробел
+  ; в «Program Files» и uninstall не запускается («нет доступа к файлу»).
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\1CSessionCleaner" \
-    "UninstallString" "$INSTDIR\Uninstall.exe"
+    "UninstallString" "\"$INSTDIR\Uninstall.exe\""
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\1CSessionCleaner" \
+    "QuietUninstallString" "\"$INSTDIR\Uninstall.exe\" /S"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\1CSessionCleaner" \
     "InstallLocation" "$INSTDIR"
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\1CSessionCleaner" \
@@ -141,6 +145,7 @@ SectionEnd
 
 ; ------------------------------- Удаление ----------------------------------
 Section "Uninstall"
+  SetShellVarContext all
   nsExec::ExecToLog 'schtasks /Delete /TN "1CSessionCleanerNightly" /F'
   Pop $0
 

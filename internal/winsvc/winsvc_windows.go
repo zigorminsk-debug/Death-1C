@@ -85,7 +85,7 @@ func (m *Manager) Connect() error {
 	}
 	// Сначала убираем возможное старое соединение, иначе Windows ответит
 	// ошибкой 1219 «множественные подключения к одному ресурсу».
-	_ = m.runSilent("net", "use", m.ipcPath(), "/delete", "/y")
+	_, _ = m.runSilent("net", "use", m.ipcPath(), "/delete", "/y")
 
 	cmd := winexec.Command("net", "use", m.ipcPath(), "/user:"+m.user, "*", "/persistent:no")
 	cmd.Stdin = strings.NewReader(m.password + "\n")

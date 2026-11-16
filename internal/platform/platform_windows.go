@@ -44,14 +44,25 @@ const (
 	createNoWindow = 0x08000000
 )
 
+// tokenElevation — ответ GetTokenInformation для класса TokenElevation.
+type tokenElevation struct {
+	TokenIsElevated int32
+}
+
 // IsElevated сообщает, запущен ли процесс с правами администратора.
+// Стандартная библиотека syscall не имеет готового Token.IsElevated,
+// поэтому запрашиваем TOKEN_INFORMATION_CLASS = TokenElevation (20) вручную.
 func IsElevated() bool {
 	token, err := syscall.OpenCurrentProcessToken()
 	if err != nil {
 		return false
 	}
 	defer token.Close()
-	return token.IsElevated()
+	var elev tokenElevation
+	var retLen uint32
+	err = syscall.GetTokenInformation(token, syscall.TokenElevation,
+		(*byte)(unsafe.Pointer(&elev)), uint32(unsafe.Sizeof(elev)), &retLen)
+	return err == nil && elev.TokenIsElevated != 0
 }
 
 // ShiftPressed сообщает, удерживается ли Shift в момент вызова.
@@ -59,7 +70,7 @@ func IsElevated() bool {
 func ShiftPressed() bool {
 	for _, vk := range []int{vkShift, vkLShift, vkRShift} {
 		r, _, _ := procGetAsyncKeyState.Call(uintptr(vk))
-		if int16(r)&0x8000 != 0 {
+		if r&0x8000 != 0 {
 			return true
 		}
 	}
@@ -260,16 +271,18 @@ func AttachConsole() bool {
 	if r == 0 {
 		return false
 	}
-	if h, _, _ := procGetStdHandle.Call(uintptr(stdOutputHandle)); h != 0 && h != ^uintptr(0) {
+	if h, _, _ := procGetStdHandle.Call(stdOutputHandle); h != 0 && h != ^uintptr(0) {
 		os.Stdout = os.NewFile(h, "stdout")
 	}
-	if h, _, _ := procGetStdHandle.Call(uintptr(stdErrorHandle)); h != 0 && h != ^uintptr(0) {
+	if h, _, _ := procGetStdHandle.Call(stdErrorHandle); h != 0 && h != ^uintptr(0) {
 		os.Stderr = os.NewFile(h, "stderr")
 	}
 	return true
 }
 
+// STD_OUTPUT_HANDLE и STD_ERROR_HANDLE как беззнаковые DWORD:
+// отрицательные константы в uintptr не помещаются.
 const (
-	stdOutputHandle = -11
-	stdErrorHandle  = -12
+	stdOutputHandle = uintptr(0xFFFFFFF5) // -11
+	stdErrorHandle  = uintptr(0xFFFFFFF6) // -12
 )

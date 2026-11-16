@@ -362,16 +362,29 @@ func (s *Server) apiWipe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// testConfig читает необязательное тело запроса: кнопки «Проверить»
+// присылают текущие значения формы настроек, чтобы проверять именно их.
+func (s *Server) testConfig(r *http.Request) config.Config {
+	cfg := s.app.Config()
+	var req struct {
+		Config *config.Config `json:"config"`
+	}
+	if err := readJSON(r, &req); err == nil && req.Config != nil {
+		cfg = s.app.MergeForTest(*req.Config)
+	}
+	return cfg
+}
+
 func (s *Server) apiTestOneC(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 	defer cancel()
-	writeJSON(w, http.StatusOK, s.app.TestOneC(ctx))
+	writeJSON(w, http.StatusOK, s.app.TestOneCConfig(ctx, s.testConfig(r)))
 }
 
 func (s *Server) apiTestWindows(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 	defer cancel()
-	writeJSON(w, http.StatusOK, s.app.TestWindows(ctx))
+	writeJSON(w, http.StatusOK, s.app.TestWindowsConfig(ctx, s.testConfig(r)))
 }
 
 func (s *Server) apiServices(w http.ResponseWriter, r *http.Request) {

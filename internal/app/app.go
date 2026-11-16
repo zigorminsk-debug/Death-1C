@@ -529,9 +529,36 @@ type TestResult struct {
 	Version  string   `json:"version"`
 }
 
-// TestOneC проверяет подключение к серверу администрирования 1С.
+// TestOneC проверяет подключение к серверу администрирования 1С
+// по сохранённым настройкам.
 func (a *App) TestOneC(ctx context.Context) TestResult {
-	cfg := a.Config()
+	return a.TestOneCConfig(ctx, a.Config())
+}
+
+// MergeForTest дополняет настройки, пришедшие из формы настроек, сохранёнными
+// секретами: интерфейс никогда не получает пароли обратно, поэтому пустое или
+// замаскированное поле означает «оставить сохранённое значение». Благодаря
+// этому кнопки «Проверить» тестируют именно то, что администратор видит
+// в форме, а не только ранее сохранённое.
+func (a *App) MergeForTest(incoming config.Config) config.Config {
+	old := a.Config()
+	if isMasked(incoming.OneC.User) || strings.TrimSpace(incoming.OneC.User) == "" {
+		incoming.OneC.User = old.OneC.User
+	}
+	if strings.TrimSpace(incoming.OneC.Password) == "" {
+		incoming.OneC.Password = old.OneC.Password
+	}
+	if isMasked(incoming.Windows.User) || strings.TrimSpace(incoming.Windows.User) == "" {
+		incoming.Windows.User = old.Windows.User
+	}
+	if strings.TrimSpace(incoming.Windows.Password) == "" {
+		incoming.Windows.Password = old.Windows.Password
+	}
+	return incoming
+}
+
+// TestOneCConfig проверяет подключение по указанным настройкам.
+func (a *App) TestOneCConfig(ctx context.Context, cfg config.Config) TestResult {
 	res := TestResult{Details: []string{}}
 	if cfg.OneC.DemoMode {
 		addr, err := a.ensureMock()
@@ -553,7 +580,7 @@ func (a *App) TestOneC(ctx context.Context) TestResult {
 	client, err := ras.Dial(ctx, cfg.OneC.Address(), timeout)
 	if err != nil {
 		res.Message = err.Error()
-		res.Details = append(res.Details, hintFor(err))
+		a.addTestHints(&res, err, cfg)
 		return res
 	}
 	defer client.Close()
@@ -561,7 +588,7 @@ func (a *App) TestOneC(ctx context.Context) TestResult {
 	snap, err := ras.CollectSnapshot(ctx, client, cfg.OneC.User, cfg.OneC.Password)
 	if err != nil {
 		res.Message = err.Error()
-		res.Details = append(res.Details, hintFor(err))
+		a.addTestHints(&res, err, cfg)
 		return res
 	}
 	res.OK = true
@@ -575,9 +602,26 @@ func (a *App) TestOneC(ctx context.Context) TestResult {
 	return res
 }
 
-// TestWindows проверяет учётные данные администратора Windows-сервера.
+// addTestHints добавляет к результату проверки подсказки: что именно
+// проверить администратору при таком отказе.
+func (a *App) addTestHints(res *TestResult, err error, cfg config.Config) {
+	if h := hintFor(err); h != "" {
+		res.Details = append(res.Details, h)
+	}
+	if !cfg.OneC.DemoMode && (strings.TrimSpace(cfg.OneC.User) == "" || strings.TrimSpace(cfg.OneC.Password) == "") {
+		res.Details = append(res.Details,
+			"Учётные данные администратора кластера не заданы: если сервер 1С требует авторизацию, заполните логин и пароль в этой форме и сохраните настройки")
+	}
+}
+
+// TestWindows проверяет учётные данные администратора Windows-сервера
+// по сохранённым настройкам.
 func (a *App) TestWindows(ctx context.Context) TestResult {
-	cfg := a.Config()
+	return a.TestWindowsConfig(ctx, a.Config())
+}
+
+// TestWindowsConfig проверяет учётные данные по указанным настройкам.
+func (a *App) TestWindowsConfig(ctx context.Context, cfg config.Config) TestResult {
 	res := TestResult{Details: []string{}}
 	if !cfg.HasWindowsCredentials() {
 		res.Message = "Не заданы сервер, логин или пароль администратора Windows"
@@ -686,6 +730,8 @@ func (a *App) Close() {
 func hintFor(err error) string {
 	text := strings.ToLower(err.Error())
 	switch {
+	case strings.Contains(text, "соединения с кластером") || strings.Contains(text, "unknownthrowable"):
+		return "Сервер администрирования (RAS) ответил, но не может соединиться с кластером: проверьте, что служба агента 1С (ragent) запущена и кластер стартован. Если сервер 1С работает не на этом компьютере, укажите его имя или IP вместо localhost"
 	case strings.Contains(text, "авториз") || strings.Contains(text, "access") || strings.Contains(text, "auth"):
 		return "Проверьте имя и пароль администратора кластера 1С (они задаются в консоли администрирования серверов 1С)"
 	case strings.Contains(text, "не удалось подключиться") || strings.Contains(text, "refused") || strings.Contains(text, "timeout") || strings.Contains(text, "i/o timeout"):

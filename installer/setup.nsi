@@ -1,4 +1,4 @@
-; ---------------------------------------------------------------------------
+﻿; ---------------------------------------------------------------------------
 ;  Установщик программы «Очистка сеансов 1С» (Session Cleaner for 1C)
 ;  Разработчик: Zakharevich Igor, ziv@csl.by, +375293371412
 ;
@@ -48,6 +48,9 @@ BrandingText "Zakharevich Igor · ziv@csl.by · +375293371412"
 !define MUI_FINISHPAGE_RUN_TEXT "Запустить программу сейчас"
 !define MUI_FINISHPAGE_SHOWREADME "$INSTDIR\README.txt"
 !define MUI_FINISHPAGE_SHOWREADME_TEXT "Показать памятку администратору"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "..\assets\icon\welcome.bmp"
+!define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_BITMAP "..\assets\icon\header.bmp"
 !define MUI_FINISHPAGE_LINK "Написать разработчику: ziv@csl.by"
 !define MUI_FINISHPAGE_LINK_URL "mailto:ziv@csl.by?subject=Очистка сеансов 1С, сборка ${BUILD_NUMBER}"
 

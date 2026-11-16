@@ -684,7 +684,7 @@
     var old = btn.innerHTML;
     btn.innerHTML = '<span class="spinner"></span> проверка…';
     btn.disabled = true;
-    api('test/' + kind, {}).then(function (r) {
+    api('test/' + kind, { config: collectConfig() }).then(function (r) {
       showTestResult(kind === 'onec' ? 'Проверка подключения к серверу 1С' : 'Проверка учётных данных Windows', r);
     }).catch(function (err) {
       showTestResult('Проверка подключения', { ok: false, message: err.message, details: [] });
@@ -698,11 +698,12 @@
     var body = el('div');
     body.appendChild(el('p', { class: 'plan-summary' }, r.message || ''));
     if (r.details && r.details.length) {
-      var ul = el('ul', { class: 'plan-list' });
+      var list = el('div', { class: 'plan-list' });
       r.details.forEach(function (d) {
-        ul.appendChild(el('li', { class: 'plan-item ' + (r.ok ? 'keep' : '') }, d));
+        if (!d) { return; }
+        list.appendChild(el('div', { class: 'plan-item' + (r.ok ? ' keep' : '') }, d));
       });
-      body.appendChild(ul);
+      if (list.firstChild) { body.appendChild(list); }
     }
     openModal(title, body, [{ label: 'Закрыть', cls: 'ghost', onClick: closeModal }]);
     if (r.ok) { toast('Проверка пройдена', r.message, 'ok'); }

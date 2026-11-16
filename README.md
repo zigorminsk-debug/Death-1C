@@ -88,7 +88,8 @@ internal/platform         Shift, UAC, single-instance, открытие окна
 internal/logger           журнал с ротацией
 internal/buildinfo        версия, номер сборки, контакты разработчика
 installer/setup.nsi       установщик NSIS (русский, MUI2)
-build/winres              winres.json + иконка для ресурсов exe
+assets/winres             winres.json + иконка для ресурсов exe
+assets/icon               иконки приложения и установщика (ico/png)
 .github/workflows         сборка с порядковыми номерами
 ```
 

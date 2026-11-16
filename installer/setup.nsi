@@ -41,8 +41,8 @@ Unicode true
 BrandingText "Zakharevich Igor · ziv@csl.by · +375293371412"
 
 ; ------------------------------- MUI ---------------------------------------
-!define MUI_ICON "..\build\icon\app.ico"
-!define MUI_UNICON "..\build\icon\app.ico"
+!define MUI_ICON "..\assets\icon\app.ico"
+!define MUI_UNICON "..\assets\icon\app.ico"
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\SessionCleaner.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "Запустить программу сейчас"

@@ -112,7 +112,8 @@ jobs:
         run: |
           # go-winres ищет каталог winres/ относительно текущей папки,
           # а пути файлов внутри winres.json — относительно самого json.
-          cd build
+          # Каталог ресурсов — assets/ (имя build/ не переживает снапшот песочницы).
+          cd assets
           "$(go env GOPATH)/bin/go-winres" make \
             --arch amd64 \
             --file-version "${APP_VERSION}.${{ steps.buildno.outputs.number }}" \

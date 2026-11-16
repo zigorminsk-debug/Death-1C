@@ -50,6 +50,81 @@ var serviceVersions = []string{"1.0", "2.0", "3.0", "4.0", "5.0", "6.0", "7.0", 
 
 var supportedRe = regexp.MustCompile(`(?m)supported=(.*?)]`)
 
+// parseOpenAck разбирает ответ на открытие эндпоинта: сервис, версия, ид.
+func parseOpenAck(data []byte) (string, int, error) {
+	r := rascodec.NewReader(bytes.NewReader(data))
+	_ = r.Str()    // имя сервиса
+	ver := r.Str() // согласованная версия
+	id := r.Nullable()
+	if e := r.Err(); e != nil {
+		return "", 0, e
+	}
+	return ver, id, nil
+}
+
+// reopen открывает на том же соединении новый эндпоинт сервиса администрирования
+// с указанной версией. Нужно серверам, у которых ras принимает новую версию,
+// но не может проксировать запросы к агенту кластера (ragent) на ней: такой
+// сервер на первый же запрос отвечает исключением swp.UnknownThrowable
+// («Ошибка установки соединения с кластером серверов»).
+func (c *conn) reopen(ctx context.Context, ver string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.tcp == nil {
+		return errors.New("соединение с сервером администрирования 1С закрыто")
+	}
+	data, err := c.exchange(ctx, pktEndpointOpen, func(w *rascodec.Writer) {
+		w.Str(serviceName)
+		w.Str(ver)
+		w.Size(0)
+	}, pktEndpointOpenAck)
+	if err != nil {
+		return err
+	}
+	got, id, perr := parseOpenAck(data)
+	if perr != nil {
+		return perr
+	}
+	major, convErr := strconv.Atoi(strings.SplitN(got, ".", 2)[0])
+	if convErr != nil || major <= 0 {
+		major = 10
+	}
+	c.endpoint = int32(id)
+	c.version = int32(major)
+	c.verStr = got
+	c.opened = true
+	c.tracef("endpoint открыт заново: версия %s, id=%d", got, id)
+	return nil
+}
+
+// downgrade открывает эндпоинт на версии службы ступенью ниже.
+// Возвращает false, если пробовать больше нечего.
+func (c *conn) downgrade(ctx context.Context) bool {
+	next := prevServiceVersion(c.verStr)
+	if next == "" {
+		return false
+	}
+	c.tracef("понизаю версию сервиса администрирования: %s → %s", c.verStr, next)
+	if err := c.reopen(ctx, next); err != nil {
+		c.tracef("endpoint open %s: %v", next, err)
+		return false
+	}
+	return true
+}
+
+// isVersionThrow распознаёт исключение сервера, которое возникает из-за
+// несовпадения версии сервиса администрирования между ras и агентом кластера:
+// в тексте такого исключения про версии ничего не сказано, поэтому обычный
+// разбор «supported=...» его не поймает.
+func isVersionThrow(err error) bool {
+	var fe *FailureError
+	if !errors.As(err, &fe) {
+		return false
+	}
+	t := strings.ToLower(fe.Error())
+	return strings.Contains(t, "unknownthrowable") || strings.Contains(t, "соединения с кластером")
+}
+
 // prevServiceVersion возвращает версию сервиса на ступень старее указанной.
 func prevServiceVersion(v string) string {
 	for i := len(serviceVersions) - 1; i > 0; i-- {
@@ -117,6 +192,9 @@ type conn struct {
 	// trace — протокол рукопожатия и отказов: помогает понять по журналу
 	// и по окну проверки, на каком именно шаге сервер ответил отказом.
 	trace []string
+
+	// verStr — строка версии сервиса, на которой открыт текущий эндпоинт.
+	verStr string
 }
 
 // tracef добавляет шаг трассировки соединения.
@@ -202,12 +280,9 @@ func (c *conn) handshake(ctx context.Context) error {
 			w.Size(0)
 		}, pktEndpointOpenAck)
 		if err == nil {
-			r := rascodec.NewReader(bytes.NewReader(data))
-			_ = r.Str()    // имя сервиса
-			ver := r.Str() // согласованная версия
-			id := r.Nullable()
-			if e := r.Err(); e != nil {
-				return fmt.Errorf("endpoint open: разбор ответа: %w", e)
+			ver, id, perr := parseOpenAck(data)
+			if perr != nil {
+				return fmt.Errorf("endpoint open: разбор ответа: %w", perr)
 			}
 			major, convErr := strconv.Atoi(strings.SplitN(ver, ".", 2)[0])
 			if convErr != nil || major <= 0 {
@@ -215,6 +290,7 @@ func (c *conn) handshake(ctx context.Context) error {
 			}
 			c.endpoint = int32(id)
 			c.version = int32(major)
+			c.verStr = ver
 			c.opened = true
 			c.tracef("endpoint open: сервис %s, версия %s, id=%d", serviceName, ver, id)
 			return nil

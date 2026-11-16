@@ -78,21 +78,31 @@ func (cl *Client) AgentVersion(ctx context.Context) (string, error) {
 }
 
 // Clusters возвращает список кластеров, зарегистрированных на агенте.
+//
+// Если сервер отвечает на первый запрос исключением о «соединении с кластером
+// серверов» (ras принял версию сервиса новее, чем та, на которой говорит агент
+// кластера), эндпоинт открывается заново на версии ступенью ниже и запрос
+// повторяется — так программа работает и с платформами, где ras и ragent
+// договориться между собой не могут.
 func (cl *Client) Clusters(ctx context.Context) ([]Cluster, error) {
-	data, err := cl.c.invoke(ctx, msgGetClustersRequest, nil)
-	if err != nil {
-		return nil, err
+	for {
+		data, err := cl.c.invoke(ctx, msgGetClustersRequest, nil)
+		if err == nil {
+			r := rascodec.NewReader(bytes.NewReader(data))
+			n := r.Size()
+			out := make([]Cluster, 0, n)
+			for i := 0; i < n && r.Err() == nil; i++ {
+				out = append(out, parseClusterInfo(r, cl.c.version))
+			}
+			if e := r.Err(); e != nil {
+				return nil, fmt.Errorf("разбор списка кластеров: %w", e)
+			}
+			return out, nil
+		}
+		if !isVersionThrow(err) || !cl.c.downgrade(ctx) {
+			return nil, err
+		}
 	}
-	r := rascodec.NewReader(bytes.NewReader(data))
-	n := r.Size()
-	out := make([]Cluster, 0, n)
-	for i := 0; i < n && r.Err() == nil; i++ {
-		out = append(out, parseClusterInfo(r, cl.c.version))
-	}
-	if err := r.Err(); err != nil {
-		return nil, fmt.Errorf("разбор списка кластеров: %w", err)
-	}
-	return out, nil
 }
 
 // Authenticate авторизует администратора кластера.

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self'">
+<title>{{TITLE}}</title>
+<link rel="icon" href="/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">1С</div>
+      <div class="brand-text">
+        <div class="brand-title">Очистка сеансов 1С</div>
+        <div class="brand-sub">Session Cleaner · <span id="build-label">сборка</span></div>
+      </div>
+    </div>
+
+    <div class="status-line">
+      <span class="pill" id="pill-elevated" title="Права администратора">права: …</span>
+      <span class="pill" id="pill-connection" title="Подключение к серверу 1С">подключение: …</span>
+      <span class="pill" id="pill-demo" hidden>демо-режим</span>
+    </div>
+
+    <nav class="topbar-actions">
+      <button class="btn ghost" id="btn-settings" type="button" title="Меню настроек (запуск с удерживаемым Shift)">Настройки</button>
+      <button class="btn ghost" id="btn-about" type="button" title="О программе и контакты разработчика">О программе</button>
+      <button class="btn ghost danger-ghost" id="btn-quit" type="button" title="Закрыть программу">Выход</button>
+    </nav>
+  </header>
+
+  <div class="alert" id="alert-banner" hidden></div>
+
+  <!-- ============================== ГЛАВНЫЙ ЭКРАН ============================== -->
+  <main class="view" id="view-main">
+
+    <section class="toolbar">
+      <div class="toolbar-buttons">
+        <button class="btn primary" id="btn-show" type="button">
+          <span class="ico">▤</span> Показать сеансы
+        </button>
+        <button class="btn danger" id="btn-clean" type="button" disabled>
+          <span class="ico">✕</span> Удалить старые
+        </button>
+        <button class="btn" id="btn-refresh" type="button" title="Обновить список без изменения фильтров">
+          <span class="ico">⟳</span> Обновить
+        </button>
+      </div>
+
+      <div class="toolbar-filters">
+        <input type="search" id="filter" class="input" placeholder="Поиск: пользователь, база, компьютер, IP…" autocomplete="off">
+        <label class="check"><input type="checkbox" id="only-problem"> только к завершению</label>
+        <label class="check"><input type="checkbox" id="hide-service"> скрыть служебные</label>
+        <label class="check"><input type="checkbox" id="auto-refresh"> автообновление</label>
+      </div>
+    </section>
+
+    <section class="cards" id="cards"></section>
+
+    <section class="table-wrap">
+      <table class="grid" id="grid">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="user_name">Пользователь</th>
+            <th class="sortable" data-sort="infobase_name">Информационная база</th>
+            <th class="sortable" data-sort="app_id">Приложение</th>
+            <th class="sortable" data-sort="host">Компьютер / IP</th>
+            <th class="sortable num" data-sort="started_unix">Запущен</th>
+            <th class="sortable num" data-sort="last_active_unix">Активность</th>
+            <th class="sortable num" data-sort="idle_min">Простой</th>
+            <th class="sortable num" data-sort="memory_mb">Память</th>
+            <th class="sortable" data-sort="action">Решение программы</th>
+          </tr>
+        </thead>
+        <tbody id="grid-body">
+          <tr class="empty-row"><td colspan="9">
+            <div class="empty">
+              <div class="empty-title">Сеансы ещё не загружены</div>
+              <div class="empty-text">Нажмите «Показать сеансы», чтобы получить список с сервера 1С.<br>
+              Кнопка «Удалить старые» оставит по каждому пользователю только самые актуальные сеансы.</div>
+            </div>
+          </td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="logbox">
+      <div class="logbox-head">
+        <span>Журнал действий</span>
+        <span class="logbox-actions">
+          <button class="btn tiny" id="btn-log-refresh" type="button">Обновить</button>
+          <button class="btn tiny" id="btn-log-save" type="button">Сохранить в файл</button>
+        </span>
+      </div>
+      <pre class="logbox-body" id="log-body">журнал пуст</pre>
+    </section>
+  </main>
+
+  <!-- ============================== НАСТРОЙКИ ============================== -->
+  <main class="view" id="view-settings" hidden>
+    <div class="settings-head">
+      <h2>Настройки программы</h2>
+      <p class="hint">Меню настроек открывается, если запустить программу с удерживаемым <kbd>Shift</kbd>.
+      Учётные данные вводятся один раз, сохраняются в зашифрованном виде и больше не отображаются.</p>
+      <button class="btn ghost" id="btn-back" type="button">← Вернуться к сеансам</button>
+    </div>
+
+    <div class="settings-grid">
+
+      <section class="card-form">
+        <h3>1. Сервер 1С:Предприятие (RAS)</h3>
+        <p class="hint">Адрес сервера администрирования кластера. Обычно это сам сервер 1С и порт 1545.</p>
+        <label class="field"><span>Сервер (имя или IP)</span>
+          <input class="input" id="onec-host" autocomplete="off" placeholder="srv-1c-01"></label>
+        <label class="field"><span>Порт RAS</span>
+          <input class="input" id="onec-port" type="number" min="1" max="65535" placeholder="1545"></label>
+        <label class="field"><span>Администратор кластера</span>
+          <input class="input secret" id="onec-user" type="password" autocomplete="new-password" placeholder="введите заново, чтобы изменить"></label>
+        <label class="field"><span>Пароль администратора кластера</span>
+          <input class="input secret" id="onec-password" type="password" autocomplete="new-password" placeholder="введите заново, чтобы изменить"></label>
+        <label class="field"><span>Таймаут подключения, сек</span>
+          <input class="input" id="onec-timeout" type="number" min="3" max="600"></label>
+        <div class="secret-state" id="onec-secret-state"></div>
+        <div class="row-actions">
+          <button class="btn" id="btn-test-onec" type="button">Проверить подключение</button>
+          <button class="btn ghost" id="btn-clear-onec" type="button">Очистить пароль</button>
+        </div>
+        <label class="check wide"><input type="checkbox" id="onec-demo">
+          демонстрационный режим (учебный сервер 1С внутри программы)</label>
+      </section>
+
+      <section class="card-form">
+        <h3>2. Администратор Windows-сервера</h3>
+        <p class="hint">Учётные данные вводятся один раз и используются, чтобы посмотреть службы 1С
+        и при необходимости запустить сервер администрирования (RAS), если он остановлен.</p>
+        <label class="field"><span>Сервер Windows</span>
+          <input class="input" id="win-host" autocomplete="off" placeholder="srv-1c-01"></label>
+        <label class="field"><span>Логин администратора</span>
+          <input class="input secret" id="win-user" type="password" autocomplete="new-password" placeholder="DOMAIN\Administrator"></label>
+        <label class="field"><span>Пароль</span>
+          <input class="input secret" id="win-password" type="password" autocomplete="new-password" placeholder="введите заново, чтобы изменить"></label>
+        <div class="secret-state" id="win-secret-state"></div>
+        <div class="row-actions">
+          <button class="btn" id="btn-test-win" type="button">Проверить учётные данные</button>
+          <button class="btn ghost" id="btn-clear-win" type="button">Очистить пароль</button>
+        </div>
+        <label class="check wide"><input type="checkbox" id="win-manage"> разрешить управление службами</label>
+      </section>
+
+      <section class="card-form">
+        <h3>3. Правило очистки сеансов</h3>
+        <p class="hint">Как программа решает, какой сеанс считать «максимально актуальным».</p>
+        <label class="field"><span>Группировать сеансы</span>
+          <select class="input" id="pol-group">
+            <option value="user_ib">по пользователю в каждой базе</option>
+            <option value="user">по пользователю на весь кластер</option>
+          </select></label>
+        <label class="field"><span>Оставлять актуальных сеансов в группе</span>
+          <input class="input" id="pol-keep" type="number" min="1" max="50"></label>
+        <label class="field"><span>Считать актуальность по</span>
+          <select class="input" id="pol-sort">
+            <option value="activity">последней активности</option>
+            <option value="started">времени запуска</option>
+          </select></label>
+        <label class="field"><span>Не трогать сеансы с простоем менее, мин (0 — без ограничения)</span>
+          <input class="input" id="pol-idle" type="number" min="0" max="100000"></label>
+        <label class="field"><span>Не трогать сеансы моложе, часов (0 — без ограничения)</span>
+          <input class="input" id="pol-age" type="number" min="0" max="100000"></label>
+        <label class="field"><span>Служебные приложения (через запятую)</span>
+          <input class="input" id="pol-apps" autocomplete="off"></label>
+        <label class="field"><span>Защищённые пользователи (через запятую)</span>
+          <input class="input" id="pol-users" autocomplete="off"></label>
+        <label class="check wide"><input type="checkbox" id="pol-skip-empty"> не трогать сеансы без имени пользователя</label>
+        <label class="check wide"><input type="checkbox" id="pol-confirm"> спрашивать подтверждение перед завершением</label>
+        <label class="field"><span>Сообщение пользователю при завершении сеанса</span>
+          <textarea class="input" id="pol-message" rows="3"></textarea></label>
+      </section>
+
+      <section class="card-form">
+        <h3>4. Интерфейс и хранение</h3>
+        <label class="field"><span>Режим окна</span>
+          <select class="input" id="ui-window">
+            <option value="app">отдельное окно программы</option>
+            <option value="browser">вкладка браузера по умолчанию</option>
+          </select></label>
+        <label class="field"><span>Автообновление списка, сек (0 — выключено)</span>
+          <input class="input" id="ui-autorefresh" type="number" min="0" max="3600"></label>
+        <label class="check wide"><input type="checkbox" id="ui-show-service"> показывать служебные сеансы в таблице</label>
+        <div class="storage-info" id="storage-info"></div>
+        <div class="row-actions">
+          <button class="btn ghost danger-ghost" id="btn-wipe" type="button">Забыть все учётные данные</button>
+        </div>
+      </section>
+
+      <section class="card-form">
+        <h3>5. Службы 1С на Windows-сервере</h3>
+        <p class="hint">Если сервер администрирования (RAS) остановлен, сеансы получить нельзя.
+        Здесь службу можно запустить, не выходя из программы.</p>
+        <div class="row-actions">
+          <button class="btn" id="btn-services" type="button">Показать службы</button>
+        </div>
+        <div class="services" id="services-list"><span class="hint">список не загружен</span></div>
+      </section>
+
+    </div>
+
+    <div class="settings-footer">
+      <button class="btn primary big" id="btn-save" type="button">Сохранить настройки</button>
+      <span class="save-status" id="save-status"></span>
+    </div>
+  </main>
+
+  <!-- ============================== МОДАЛЬНЫЕ ОКНА ============================== -->
+  <div class="backdrop" id="backdrop" hidden>
+    <div class="modal" id="modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><span id="modal-title">Заголовок</span>
+        <button class="btn tiny ghost" id="modal-close" type="button">✕</button></div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-foot" id="modal-foot"></div>
+    </div>
+  </div>
+
+</div>
+<script src="/bootstrap.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

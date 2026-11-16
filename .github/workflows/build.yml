@@ -1,0 +1,152 @@
+# Сборка установщика программы «Очистка сеансов 1С».
+#
+# Каждая сборка получает ПОРЯДКОВЫЙ НОМЕР — github.run_number: он растёт на
+# единицу с каждым запуском рабочего процесса и попадает
+#   - в exe-файл (свойства файла и окно «О программе»),
+#   - в имя установщика SessionCleaner-Setup-<номер>.exe,
+#   - в имя артефакта загрузки.
+#
+# Сборка идёт только в GitHub Actions: локальная сборка не требуется.
+
+name: build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Проверка кода и тесты на Linux (быстрая обратная связь).
+  # ---------------------------------------------------------------------
+  check:
+    name: go vet / test (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      - name: gofmt
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "$out"; echo "::error::gofmt: файлы не отформатированы"; exit 1; fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./... -count=1
+
+  # ---------------------------------------------------------------------
+  # Основная сборка: Windows, ресурсы exe, NSIS-установщик, артефакты.
+  # ---------------------------------------------------------------------
+  build:
+    name: build windows + installer
+    runs-on: windows-latest
+    needs: check
+    env:
+      APP_VERSION: "1.0.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      - name: Номер сборки
+        id: buildno
+        shell: bash
+        run: |
+          echo "number=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "commit=$(echo ${GITHUB_SHA} | cut -c1-8)" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Тесты (windows)
+        run: go test ./... -count=1
+
+      - name: go-winres
+        run: go install github.com/tc-hib/go-winres@latest
+
+      - name: Ресурсы exe (иконка, манифест, версия)
+        shell: bash
+        run: |
+          cd build/winres
+          "$(go env GOPATH)/bin/go-winres" make \
+            --arch amd64 \
+            --file-version "${APP_VERSION}.${{ steps.buildno.outputs.number }}" \
+            --product-version "${APP_VERSION}.${{ steps.buildno.outputs.number }}"
+          mv rsrc_windows_amd64.syso ../../cmd/sessioncleaner/
+
+      - name: Сборка SessionCleaner.exe
+        shell: bash
+        run: |
+          mkdir -p build/out
+          go build -trimpath -v \
+            -ldflags "-H windowsgui -s -w \
+              -X github.com/zigorminsk-debug/death-1c/internal/buildinfo.Version=${APP_VERSION} \
+              -X github.com/zigorminsk-debug/death-1c/internal/buildinfo.Build=${{ steps.buildno.outputs.number }} \
+              -X github.com/zigorminsk-debug/death-1c/internal/buildinfo.Commit=${{ steps.buildno.outputs.commit }} \
+              -X github.com/zigorminsk-debug/death-1c/internal/buildinfo.Date=${{ steps.buildno.outputs.date }} \
+              -X github.com/zigorminsk-debug/death-1c/internal/buildinfo.Channel=release" \
+            -o build/out/SessionCleaner.exe ./cmd/sessioncleaner
+
+      - name: Проверка версии в exe
+        shell: bash
+        run: |
+          ./build/out/SessionCleaner.exe -version
+          ./build/out/SessionCleaner.exe -version | grep -q "сборка ${{ steps.buildno.outputs.number }}"
+
+      - name: NSIS (проверка наличия)
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            Write-Host "makensis не найден — ставим NSIS через chocolatey"
+            choco install nsis --yes --no-progress
+          }
+          makensis -VERSION
+
+      - name: Установщик (NSIS)
+        shell: bash
+        run: |
+          makensis -V3 \
+            -DAPP_VERSION=${APP_VERSION} \
+            -DBUILD_NUMBER=${{ steps.buildno.outputs.number }} \
+            -DOUT_DIR="$GITHUB_WORKSPACE/build/out" \
+            installer/setup.nsi
+          ls -la build/out
+
+      - name: Артефакты
+        uses: actions/upload-artifact@v4
+        with:
+          name: SessionCleaner-build-${{ steps.buildno.outputs.number }}
+          path: |
+            build/out/SessionCleaner.exe
+            build/out/SessionCleaner-Setup-${{ steps.buildno.outputs.number }}.exe
+          if-no-files-found: error
+          retention-days: 90
+
+      # Публикация релиза — только для тегов v*: релиз получает тот же
+      # порядковый номер сборки, что и exe-файл.
+      - name: Release (только теги)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Очистка сеансов 1С ${{ env.APP_VERSION }} (сборка ${{ steps.buildno.outputs.number }})"
+          files: |
+            build/out/SessionCleaner-Setup-${{ steps.buildno.outputs.number }}.exe
+            build/out/SessionCleaner.exe
+          generate_release_notes: true

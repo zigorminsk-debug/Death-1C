@@ -109,6 +109,10 @@ html, body {
 .alert.bad { background: var(--bad-bg); color: #ffd0d0; border-bottom-color: rgba(255,93,93,.3); }
 .alert a { color: inherit; font-weight: 700; }
 
+/* Атрибут hidden обязан побеждать display любых классов: без этого
+   модальное окно и скрытые экраны показывались бы всегда. */
+[hidden] { display: none !important; }
+
 .view { flex: 1 1 auto; padding: 16px 18px 26px; display: flex; flex-direction: column; gap: 14px; }
 
 .toolbar {

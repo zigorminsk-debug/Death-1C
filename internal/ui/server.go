@@ -118,7 +118,7 @@ func (s *Server) Start(addr string) (string, error) {
 			s.app.Log().Errorf("локальный сервер интерфейса остановлен: %v", err)
 		}
 	}()
-	s.app.Log().Info("интерфейс запущен: %s (режим окна: %s)", s.baseURL, s.startView)
+	s.app.Log().Info("интерфейс запущен: %s (стартовый экран: %s)", s.baseURL, s.startView)
 	return s.baseURL, nil
 }
 

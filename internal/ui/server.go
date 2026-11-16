@@ -40,8 +40,8 @@ type Server struct {
 	startView string
 	baseURL   string
 
-	mu         sync.Mutex
-	lastBeat   time.Time
+	mu          sync.Mutex
+	lastBeat    time.Time
 	allowRemote bool
 
 	quit     chan struct{}
@@ -328,9 +328,9 @@ func (s *Server) apiExecute(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) apiConfig(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Config              config.Config `json:"config"`
-		ClearOneCPassword   bool          `json:"clear_onec_password"`
-		ClearWindowsPassword bool         `json:"clear_windows_password"`
+		Config               config.Config `json:"config"`
+		ClearOneCPassword    bool          `json:"clear_onec_password"`
+		ClearWindowsPassword bool          `json:"clear_windows_password"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": err.Error()})

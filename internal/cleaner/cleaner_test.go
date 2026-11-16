@@ -13,14 +13,14 @@ var now = time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC)
 func sess(user, ib, ibName, app string, idleMin, ageMin int, id int) ras.SessionView {
 	return ras.SessionView{
 		Session: ras.Session{
-			UUID:         "s-" + user + "-" + ib + "-" + time.Duration(idleMin).String(),
-			ID:           id,
-			AppID:        app,
-			UserName:     user,
-			Host:         "WS-" + user,
-			InfobaseID:   ib,
-			StartedAt:    now.Add(-time.Duration(ageMin) * time.Minute),
-			LastActiveAt: now.Add(-time.Duration(idleMin) * time.Minute),
+			UUID:          "s-" + user + "-" + ib + "-" + time.Duration(idleMin).String(),
+			ID:            id,
+			AppID:         app,
+			UserName:      user,
+			Host:          "WS-" + user,
+			InfobaseID:    ib,
+			StartedAt:     now.Add(-time.Duration(ageMin) * time.Minute),
+			LastActiveAt:  now.Add(-time.Duration(idleMin) * time.Minute),
 			MemoryCurrent: int64(id+1) * 1024 * 1024,
 		},
 		ClusterID:    "cluster-1",

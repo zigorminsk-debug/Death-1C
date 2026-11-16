@@ -213,9 +213,9 @@ func TestEndpointEnvelopeGolden(t *testing.T) {
 
 	got := endpointEnvelope(1, msgGetSessionsRequest, b[:])
 	want := []byte{
-		0x01,                   // endpointId = 1 (nullable)
-		0x01, 0x00,             // формат кодирования = 256
-		0x01,                   // вид нагрузки = MESSAGE
+		0x01,       // endpointId = 1 (nullable)
+		0x01, 0x00, // формат кодирования = 256
+		0x01,                        // вид нагрузки = MESSAGE
 		byte(msgGetSessionsRequest), // код сообщения = 65
 	}
 	want = append(want, b[:]...)
@@ -231,11 +231,11 @@ func TestEndpointEnvelopeGolden(t *testing.T) {
 
 func TestNormalizeAddr(t *testing.T) {
 	cases := map[string]string{
-		"":                   "localhost:1545",
-		"srv-1c":             "srv-1c:1545",
-		"srv-1c:2545":        "srv-1c:2545",
-		"  10.0.0.5  ":       "10.0.0.5:1545",
-		"10.0.0.5:1545 ":     "10.0.0.5:1545",
+		"":               "localhost:1545",
+		"srv-1c":         "srv-1c:1545",
+		"srv-1c:2545":    "srv-1c:2545",
+		"  10.0.0.5  ":   "10.0.0.5:1545",
+		"10.0.0.5:1545 ": "10.0.0.5:1545",
 	}
 	for in, want := range cases {
 		if got := NormalizeAddr(in); got != want {

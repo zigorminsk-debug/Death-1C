@@ -307,5 +307,3 @@ func TestRemaining(t *testing.T) {
 		t.Error("после второй строки данных остаться не должно")
 	}
 }
-
-

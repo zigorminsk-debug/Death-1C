@@ -9,20 +9,20 @@ import (
 // Коды сообщений сервиса администрирования. Приведены только те,
 // которые использует программа; полный набор совпадает с rac.exe.
 const (
-	msgAuthenticateRequest         = 9
-	msgAddAuthenticationRequest    = 10
-	msgGetClustersRequest          = 11
-	msgGetClustersResponse         = 12
-	msgGetInfobasesShortRequest    = 42
-	msgGetInfobasesShortResponse   = 43
-	msgGetSessionsRequest          = 65
-	msgGetSessionsResponse         = 66
-	msgGetSessionInfoRequest       = 69
-	msgGetSessionInfoResponse      = 70
-	msgTerminateSessionRequest     = 71
-	msgInterruptServerCallRequest  = 117
-	msgGetAgentVersionRequest      = 135
-	msgGetAgentVersionResponse     = 136
+	msgAuthenticateRequest        = 9
+	msgAddAuthenticationRequest   = 10
+	msgGetClustersRequest         = 11
+	msgGetClustersResponse        = 12
+	msgGetInfobasesShortRequest   = 42
+	msgGetInfobasesShortResponse  = 43
+	msgGetSessionsRequest         = 65
+	msgGetSessionsResponse        = 66
+	msgGetSessionInfoRequest      = 69
+	msgGetSessionInfoResponse     = 70
+	msgTerminateSessionRequest    = 71
+	msgInterruptServerCallRequest = 117
+	msgGetAgentVersionRequest     = 135
+	msgGetAgentVersionResponse    = 136
 )
 
 // Cluster — кластер серверов 1С.
@@ -64,18 +64,18 @@ type Infobase struct {
 
 // License — лицензия, выданная сеансу.
 type License struct {
-	FullName        string
-	ShortPresent    string
-	FullPresent     string
-	Series          string
-	IssuedByServer  bool
-	Net             bool
-	LicenseType     int
-	MaxUsersAll     int
-	MaxUsersCur     int
-	RmngrAddress    string
-	RmngrPid        string
-	RmngrPort       int
+	FullName       string
+	ShortPresent   string
+	FullPresent    string
+	Series         string
+	IssuedByServer bool
+	Net            bool
+	LicenseType    int
+	MaxUsersAll    int
+	MaxUsersCur    int
+	RmngrAddress   string
+	RmngrPid       string
+	RmngrPort      int
 }
 
 // Session — сеанс информационной базы.
@@ -95,15 +95,15 @@ type Session struct {
 	DbProcInfo     string
 	DbProcTook     int
 
-	StartedAt   time.Time
+	StartedAt    time.Time
 	LastActiveAt time.Time
 	DbProcTookAt time.Time
 
-	Hibernate                bool
-	BlockedByDBMS            int
-	BlockedByLS              int
-	PassiveHibernateTime     int
-	HibernateTerminateTime   int
+	Hibernate              bool
+	BlockedByDBMS          int
+	BlockedByLS            int
+	PassiveHibernateTime   int
+	HibernateTerminateTime int
 
 	CallsAll        int
 	CallsLast5Min   int64

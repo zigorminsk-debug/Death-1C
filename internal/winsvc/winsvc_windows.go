@@ -35,12 +35,12 @@ type Service struct {
 
 // Manager — операции со службами удалённого сервера.
 type Manager struct {
-	mu       sync.Mutex
-	host     string
-	user     string
-	password string
+	mu        sync.Mutex
+	host      string
+	user      string
+	password  string
 	connected bool
-	logf     func(format string, args ...interface{})
+	logf      func(format string, args ...interface{})
 }
 
 // New создаёт менеджер служб.

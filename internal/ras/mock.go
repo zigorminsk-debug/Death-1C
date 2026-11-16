@@ -127,7 +127,7 @@ func (s *MockServer) serve(c net.Conn) {
 	_ = c.SetDeadline(time.Now().Add(2 * time.Minute))
 
 	// Negotiate: magic + версия протокола + версия кодека, без кадра пакета.
-	neg := make([]byte, 12)
+	neg := make([]byte, 8)
 	if _, err := io.ReadFull(c, neg); err != nil {
 		return
 	}
@@ -591,27 +591,27 @@ func DemoData() ([]Cluster, []Infobase, []SessionView) {
 		started := now.Add(-time.Duration(sp.ageMin) * time.Minute)
 		lastActive := now.Add(-time.Duration(sp.idleMin) * time.Minute)
 		sess := Session{
-			UUID:               fmt.Sprintf("d000000%d-0000-0000-0000-%012d", i, i+1),
-			ID:                 1000 + i,
-			InfobaseID:         sp.ib,
-			ConnectionID:       fmt.Sprintf("c000000%d-0000-0000-0000-%012d", i, i+1),
-			ProcessID:          "e1e1e1e1-2222-3333-4444-555555555555",
-			AppID:              sp.app,
-			UserName:           sp.user,
-			Host:               sp.host,
-			Locale:             "ru_RU",
-			ClientIP:           sp.clientIP,
-			StartedAt:          started,
-			LastActiveAt:       lastActive,
-			Hibernate:          sp.hiber,
-			CallsAll:           120 + i*37,
-			CallsLast5Min:      int64(i % 5),
-			BytesAll:           int64(1200000 + i*88000),
-			MemoryCurrent:      int64(18_000_000 + i*1_500_000),
-			MemoryTotal:        int64(95_000_000 + i*3_000_000),
-			DurationCurrent:    15 + i,
-			DurationAll:        3600 + i*120,
-			PassiveHibernateTime: 1200,
+			UUID:                   fmt.Sprintf("d000000%d-0000-0000-0000-%012d", i, i+1),
+			ID:                     1000 + i,
+			InfobaseID:             sp.ib,
+			ConnectionID:           fmt.Sprintf("c000000%d-0000-0000-0000-%012d", i, i+1),
+			ProcessID:              "e1e1e1e1-2222-3333-4444-555555555555",
+			AppID:                  sp.app,
+			UserName:               sp.user,
+			Host:                   sp.host,
+			Locale:                 "ru_RU",
+			ClientIP:               sp.clientIP,
+			StartedAt:              started,
+			LastActiveAt:           lastActive,
+			Hibernate:              sp.hiber,
+			CallsAll:               120 + i*37,
+			CallsLast5Min:          int64(i % 5),
+			BytesAll:               int64(1200000 + i*88000),
+			MemoryCurrent:          int64(18_000_000 + i*1_500_000),
+			MemoryTotal:            int64(95_000_000 + i*3_000_000),
+			DurationCurrent:        15 + i,
+			DurationAll:            3600 + i*120,
+			PassiveHibernateTime:   1200,
 			HibernateTerminateTime: 86400,
 		}
 		if sp.user != "" {

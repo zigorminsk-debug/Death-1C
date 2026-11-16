@@ -53,13 +53,13 @@ type Item struct {
 	IdleMin        int    `json:"idle_min"`
 	AgeMin         int    `json:"age_min"`
 
-	Hibernate     bool    `json:"hibernate"`
-	MemoryMB      float64 `json:"memory_mb"`
-	CallsAll      int     `json:"calls_all"`
-	CallsLast5Min int64   `json:"calls_last5min"`
-	Licenses      string  `json:"licenses"`
-	DataSeparation string `json:"data_separation"`
-	CurrentService string `json:"current_service"`
+	Hibernate      bool    `json:"hibernate"`
+	MemoryMB       float64 `json:"memory_mb"`
+	CallsAll       int     `json:"calls_all"`
+	CallsLast5Min  int64   `json:"calls_last5min"`
+	Licenses       string  `json:"licenses"`
+	DataSeparation string  `json:"data_separation"`
+	CurrentService string  `json:"current_service"`
 
 	Group       string `json:"group"`
 	GroupTitle  string `json:"group_title"`

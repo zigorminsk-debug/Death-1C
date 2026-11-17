@@ -85,7 +85,7 @@ func (cl *Client) AgentVersion(ctx context.Context) (string, error) {
 // повторяется — так программа работает и с платформами, где ras и ragent
 // договориться между собой не могут.
 func (cl *Client) Clusters(ctx context.Context) ([]Cluster, error) {
-	for {
+	for attempt := 0; attempt < 6; attempt++ {
 		data, err := cl.c.invoke(ctx, msgGetClustersRequest, nil)
 		if err == nil {
 			r := rascodec.NewReader(bytes.NewReader(data))

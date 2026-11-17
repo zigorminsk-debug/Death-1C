@@ -585,6 +585,14 @@ func (a *App) TestOneCConfig(ctx context.Context, cfg config.Config) TestResult 
 	}
 	defer client.Close()
 
+	// Проба версии агента: позволяет отличить «ras живой, но кластера нет»
+	// от «ras не может проксировать запросы к агенту».
+	if v, verr := client.AgentVersion(ctx); verr != nil {
+		res.Details = append(res.Details, fmt.Sprintf("шаг: запрос версии агента: %v", verr))
+	} else {
+		res.Details = append(res.Details, "шаг: версия агента 1С: "+v)
+	}
+
 	snap, err := ras.CollectSnapshot(ctx, client, cfg.OneC.User, cfg.OneC.Password)
 	if err != nil {
 		res.Message = err.Error()
@@ -615,6 +623,17 @@ func (a *App) addTestHints(res *TestResult, err error, cfg config.Config) {
 	if !cfg.OneC.DemoMode && (strings.TrimSpace(cfg.OneC.User) == "" || strings.TrimSpace(cfg.OneC.Password) == "") {
 		res.Details = append(res.Details,
 			"Учётные данные администратора кластера не заданы: если сервер 1С требует авторизацию, заполните логин и пароль в этой форме и сохраните настройки")
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "соединения с кластером") {
+		addr := cfg.OneC.Address()
+		host := addr
+		if i := strings.LastIndex(host, ":"); i > 0 {
+			host = host[:i]
+		}
+		if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+			res.Details = append(res.Details,
+				"Сейчас указан адрес "+addr+": отвечает локальная служба RAS этого компьютера, а не сервер 1С с рабочим кластером. Замените адрес на имя или IP сервера 1С (например, SRV-1C) и сохраните настройки")
+		}
 	}
 }
 
@@ -735,7 +754,7 @@ func hintFor(err error) string {
 	text := strings.ToLower(err.Error())
 	switch {
 	case strings.Contains(text, "соединения с кластером") || strings.Contains(text, "unknownthrowable"):
-		return "Сервер администрирования (RAS) ответил, но не может соединиться с кластером: проверьте, что служба агента 1С (ragent) запущена и кластер стартован. Если сервер 1С работает не на этом компьютере, укажите его имя или IP вместо localhost"
+		return "Сервер администрирования (RAS) по указанному адресу ответил, но не может соединиться со своим кластером: либо кластер на этой машине остановлен, либо сервер 1С с рабочим кластером находится на другой машине. Укажите в поле «Сервер» имя или IP именно той машины, где запущен кластер (имя видно в консоли сервера 1С, например SRV-1C), а не localhost"
 	case strings.Contains(text, "авториз") || strings.Contains(text, "access") || strings.Contains(text, "auth"):
 		return "Проверьте имя и пароль администратора кластера 1С (они задаются в консоли администрирования серверов 1С)"
 	case strings.Contains(text, "не удалось подключиться") || strings.Contains(text, "refused") || strings.Contains(text, "timeout") || strings.Contains(text, "i/o timeout"):

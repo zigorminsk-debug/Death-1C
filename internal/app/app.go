@@ -5,12 +5,12 @@ package app
 
 import (
 	"context"
-	"strconv"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -345,7 +345,6 @@ func (a *App) Refresh(ctx context.Context) (*cleaner.Plan, error) {
 		return nil, err
 	}
 
-	timeout := time.Duration(cfg.OneC.TimeoutSec) * time.Second
 	a.log.Info("подключение к серверу администрирования 1С %s", cfg.OneC.Address())
 	client, note, err := a.dialRAS(ctx, cfg)
 	if err != nil {
@@ -490,7 +489,6 @@ func (a *App) Execute(ctx context.Context, uuids []string, force bool) (*Result,
 		cfg.OneC.Host = addr
 		cfg.OneC.Port = 0
 	}
-	timeout := time.Duration(cfg.OneC.TimeoutSec) * time.Second
 	client, _, err := a.dialRAS(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -668,7 +666,6 @@ func (a *App) TestOneCConfig(ctx context.Context, cfg config.Config) TestResult 
 		res.Message = err.Error()
 		return res
 	}
-	timeout := time.Duration(cfg.OneC.TimeoutSec) * time.Second
 	start := time.Now()
 	client, note, err := a.dialRAS(ctx, cfg)
 	if err != nil {

@@ -101,7 +101,7 @@ func (cl *Client) Clusters(ctx context.Context) ([]Cluster, error) {
 			return out, nil
 		}
 		lastErr = err
-		if !isVersionThrow(err) || !cl.c.downgrade(ctx) {
+		if !IsClusterThrow(err) || !cl.c.downgrade(ctx) {
 			return nil, err
 		}
 	}

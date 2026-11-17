@@ -116,7 +116,7 @@ func (c *conn) downgrade(ctx context.Context) bool {
 // несовпадения версии сервиса администрирования между ras и агентом кластера:
 // в тексте такого исключения про версии ничего не сказано, поэтому обычный
 // разбор «supported=...» его не поймает.
-func isVersionThrow(err error) bool {
+func IsClusterThrow(err error) bool {
 	var fe *FailureError
 	if !errors.As(err, &fe) {
 		return false

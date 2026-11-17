@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"strconv"
 	"errors"
 	"fmt"
 	"os"
@@ -42,6 +43,10 @@ type App struct {
 	lastSnap *ras.Snapshot
 	lastErr  string
 	started  time.Time
+
+	// rasPort — порт, на котором сервер реально отдаёт список кластеров
+	// (1545 — служба RAS, 1540 — напрямую менеджер кластера). 0 — порт из настроек.
+	rasPort int
 }
 
 // New загружает настройки и готовит приложение к работе.
@@ -342,10 +347,13 @@ func (a *App) Refresh(ctx context.Context) (*cleaner.Plan, error) {
 
 	timeout := time.Duration(cfg.OneC.TimeoutSec) * time.Second
 	a.log.Info("подключение к серверу администрирования 1С %s", cfg.OneC.Address())
-	client, err := ras.Dial(ctx, cfg.OneC.Address(), timeout)
+	client, note, err := a.dialRAS(ctx, cfg)
 	if err != nil {
 		a.setErr(err)
 		return nil, err
+	}
+	if note != "" {
+		a.log.Info("%s", note)
 	}
 	defer client.Close()
 
@@ -483,7 +491,7 @@ func (a *App) Execute(ctx context.Context, uuids []string, force bool) (*Result,
 		cfg.OneC.Port = 0
 	}
 	timeout := time.Duration(cfg.OneC.TimeoutSec) * time.Second
-	client, err := ras.Dial(ctx, cfg.OneC.Address(), timeout)
+	client, _, err := a.dialRAS(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -557,6 +565,91 @@ func (a *App) MergeForTest(incoming config.Config) config.Config {
 	return incoming
 }
 
+// dialRAS подключается к серверу администрирования 1С и сразу проверяет,
+// что соединение способно отдать список кластеров.
+//
+// На некоторых серверах служба RAS (порт 1545) принимает соединение и даже
+// сообщает версию агента, но на любой запрос кластеров отвечает исключением
+// «Ошибка установки соединения с кластером серверов». Менеджер кластера
+// (ragent, порт 1540) говорит по тому же протоколу администрирования и отдаёт
+// всё напрямую. Поэтому, если проверка на настроенном порту закончилась таким
+// характерным исключением, программа подключается к порту 1540 и запоминает
+// рабочий порт для последующих операций.
+func (a *App) dialRAS(ctx context.Context, cfg config.Config) (*ras.Client, string, error) {
+	timeout := time.Duration(cfg.OneC.TimeoutSec) * time.Second
+	a.mu.Lock()
+	preferred := a.rasPort
+	a.mu.Unlock()
+
+	base := cfg.OneC.Address()
+	ports := []int{}
+	for _, p := range []int{preferred, portOf(base), cfg.OneC.Port, 1545, 1540} {
+		if p > 0 && !containsInt(ports, p) {
+			ports = append(ports, p)
+		}
+	}
+
+	var lastErr error
+	for _, port := range ports {
+		addr := withPort(base, port)
+		client, err := ras.Dial(ctx, addr, timeout)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if _, probeErr := client.Clusters(ctx); probeErr == nil {
+			note := ""
+			if preferred == 0 && port != portOf(base) && port != cfg.OneC.Port {
+				a.mu.Lock()
+				a.rasPort = port
+				a.mu.Unlock()
+				note = fmt.Sprintf("Служба RAS (порт 1545) на сервере %s не отдаёт список кластеров, "+
+					"поэтому программа подключилась напрямую к менеджеру кластера (порт %d)", cfg.OneC.Host, port)
+			}
+			return client, note, nil
+		} else {
+			_ = client.Close()
+			lastErr = probeErr
+			if ras.IsClusterThrow(probeErr) && port != 1540 {
+				a.log.Warn("порт %d: %v — пробую прямое подключение к менеджеру кластера", port, probeErr)
+				continue
+			}
+			return nil, "", probeErr
+		}
+	}
+	return nil, "", lastErr
+}
+
+// portOf извлекает порт из адреса «хост:порт».
+func portOf(addr string) int {
+	i := strings.LastIndex(addr, ":")
+	if i < 0 || strings.Contains(addr[i:], "]") {
+		return 0
+	}
+	p, err := strconv.Atoi(addr[i+1:])
+	if err != nil {
+		return 0
+	}
+	return p
+}
+
+// withPort заменяет порт в адресе «хост:порт».
+func withPort(addr string, port int) string {
+	if i := strings.LastIndex(addr, ":"); i >= 0 && !strings.Contains(addr[i:], "]") {
+		return addr[:i+1] + strconv.Itoa(port)
+	}
+	return addr + ":" + strconv.Itoa(port)
+}
+
+func containsInt(list []int, v int) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
 // TestOneCConfig проверяет подключение по указанным настройкам.
 func (a *App) TestOneCConfig(ctx context.Context, cfg config.Config) TestResult {
 	res := TestResult{Details: []string{}}
@@ -577,13 +670,16 @@ func (a *App) TestOneCConfig(ctx context.Context, cfg config.Config) TestResult 
 	}
 	timeout := time.Duration(cfg.OneC.TimeoutSec) * time.Second
 	start := time.Now()
-	client, err := ras.Dial(ctx, cfg.OneC.Address(), timeout)
+	client, note, err := a.dialRAS(ctx, cfg)
 	if err != nil {
 		res.Message = err.Error()
 		a.addTestHints(&res, err, cfg)
 		return res
 	}
 	defer client.Close()
+	if note != "" {
+		res.Details = append(res.Details, note)
+	}
 
 	// Проба версии агента: позволяет отличить «ras живой, но кластера нет»
 	// от «ras не может проксировать запросы к агенту».

@@ -85,6 +85,7 @@ func (cl *Client) AgentVersion(ctx context.Context) (string, error) {
 // повторяется — так программа работает и с платформами, где ras и ragent
 // договориться между собой не могут.
 func (cl *Client) Clusters(ctx context.Context) ([]Cluster, error) {
+	var lastErr error
 	for attempt := 0; attempt < 6; attempt++ {
 		data, err := cl.c.invoke(ctx, msgGetClustersRequest, nil)
 		if err == nil {
@@ -99,10 +100,12 @@ func (cl *Client) Clusters(ctx context.Context) ([]Cluster, error) {
 			}
 			return out, nil
 		}
+		lastErr = err
 		if !isVersionThrow(err) || !cl.c.downgrade(ctx) {
 			return nil, err
 		}
 	}
+	return nil, lastErr
 }
 
 // Authenticate авторизует администратора кластера.
